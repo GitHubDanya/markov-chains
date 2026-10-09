@@ -5,4 +5,5 @@ set(CMAKE_C_STANDARD 11)
 
 add_executable(markov_chains
         main.c
+        lib/cJSON.c
 )
