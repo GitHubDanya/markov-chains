@@ -107,19 +107,7 @@ static char* class_to_string(const int class, char** classes, const int size) {
     return classes[class];
 }
 
-static void run_random_markov_chain_example() {
-    struct markov_chain chain = createRandomChain(5);
-
-    printf("Generated following transition matrix:\n");
-    print_2d_array(chain.matrix, chain.size);
-
-    for (int i = 0; i < 50; i++) {
-        printf("%d\n", chain.current_class);
-        hop(&chain);
-    }
-}
-
-cJSON* parse_mrkv_file() {
+const cJSON* parse_mrkv_file() {
     FILE *textSamples = fopen(TEXT_SOURCE, "rb");
     if (!textSamples) {
         fprintf(stderr, "Text file not found");
@@ -161,7 +149,7 @@ static void populate_transition_matrix(const cJSON* sourceText, char** classes, 
         const cJSON *item = NULL;
         const int currentClass = string_to_class(keyNode->string, classes, entries);
         cJSON_ArrayForEach(item, keyNode) {
-            char pair[64];
+            char pair[128];
             if (sscanf(keyNode->string, "%*s %49s", pair) != 1) continue;
 
             strcat(pair, " ");
@@ -216,9 +204,9 @@ static void run_text_markov_chain() {
     for (int i = 0; i < 1200; i++) {
         char* classString = strdup(class_to_string(chain->current_class, chain->labels, chain->size));
         if (i == 0)
-            printf("%s", classString);
+            printf("%s ", classString);
         else {
-            char res[64];
+            char res[128];
             if (sscanf(classString, "%*s %49s", res) != 1) continue;
             printf("%s ", res);
         }
@@ -228,6 +216,18 @@ static void run_text_markov_chain() {
         hop(chain);
 
         if (chain->current_class == -1 || chain->current_class == chain->size) {chain->current_class = 0;}
+    }
+}
+
+static void run_random_markov_chain_example() {
+    struct markov_chain chain = createRandomChain(5);
+
+    printf("Generated following transition matrix:\n");
+    print_2d_array(chain.matrix, chain.size);
+
+    for (int i = 0; i < 50; i++) {
+        printf("%d\n", chain.current_class);
+        hop(&chain);
     }
 }
 
