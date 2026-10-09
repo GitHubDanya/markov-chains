@@ -4,12 +4,13 @@
 #include <time.h>
 #include "lib/cJSON.h"
 
-const char* TEXT_SOURCE = "./text.txt";
+static const char* TEXT_SOURCE = "./probabilities.mrkv";
 
 struct markov_chain {
     int size;
     int current_class;
     float** matrix;
+    char** labels;
     void (*hop)(struct markov_chain* self);
 };
 
@@ -63,6 +64,7 @@ static struct markov_chain createRandomChain(const int size) {
 
     result.size = size;
     result.current_class = 0;
+    result.labels = 0;
     result.matrix = (float**)malloc(size * sizeof(float*));
     for (int i = 0; i < size; i++) { result.matrix[i] = (float*)malloc(size * sizeof(float)); }
     populate_with_rand(result.matrix, size);
@@ -76,6 +78,7 @@ static struct markov_chain createMarkovChain(const int size, float** transitionM
 
     result.size = size;
     result.current_class = 0;
+    result.labels = 0;
     result.matrix = transitionMatrix;
     result.hop = hop;
 
@@ -104,7 +107,7 @@ static char* class_to_string(const int class, char** classes, const int size) {
     return classes[class];
 }
 
-void run_random_markov_chain_example() {
+static void run_random_markov_chain_example() {
     struct markov_chain chain = createRandomChain(5);
 
     printf("Generated following transition matrix:\n");
@@ -116,11 +119,11 @@ void run_random_markov_chain_example() {
     }
 }
 
-void run_text_markov_chain() {
-    FILE *textSamples = fopen("./probabilities.mrkv", "rb");
+cJSON* parse_mrkv_file() {
+    FILE *textSamples = fopen(TEXT_SOURCE, "rb");
     if (!textSamples) {
         fprintf(stderr, "Text file not found");
-        return;
+        return NULL;
     }
 
     fseek(textSamples, 0, SEEK_END);
@@ -131,41 +134,32 @@ void run_text_markov_chain() {
     if (!buffer) {
         fprintf(stderr, "Couldn't allocate memory for the given text file.");
         fclose(textSamples);
-        return;
+        return NULL;
     }
 
-    size_t read_bytes = fread(buffer, 1, length, textSamples);
+    const size_t read_bytes = fread(buffer, 1, length, textSamples);
     buffer[read_bytes] = '\0';
-
     fclose(textSamples);
     cJSON* sourceText = cJSON_Parse(buffer);
     free(buffer);
+    return sourceText;
+}
 
-    int entries = cJSON_GetArraySize(sourceText);
-    char** classes = malloc(entries * sizeof(*classes));
-
-    float** transitionMatrix = calloc(entries, sizeof(float*));
-    for (int i = 0; i < entries; i++)
-        transitionMatrix[i] = calloc(entries, sizeof(float));
-
-    if (classes == NULL) {
-        fprintf(stderr, "Couldn't allocate memory for class identifiers.");
-        return;
-    }
-
+static void populate_classes(const cJSON* sourceText, char** classes) {
     const cJSON* keyNode = NULL;
     int i = 0;
     cJSON_ArrayForEach(keyNode, sourceText) {
         classes[i] = strdup(keyNode->string);
-        printf("%s\n", classes[i]);
+        //printf("%s\n", classes[i]);
         i++;
     }
+}
 
-    printf("\n\n");
-
+static void populate_transition_matrix(const cJSON* sourceText, char** classes, const int entries, float** transitionMatrix) {
+    const cJSON* keyNode = NULL;
     cJSON_ArrayForEach(keyNode, sourceText) {
         const cJSON *item = NULL;
-        int currentClass = string_to_class(keyNode->string, classes, entries);
+        const int currentClass = string_to_class(keyNode->string, classes, entries);
         cJSON_ArrayForEach(item, keyNode) {
             char pair[64];
             if (sscanf(keyNode->string, "%*s %49s", pair) != 1) continue;
@@ -173,26 +167,54 @@ void run_text_markov_chain() {
             strcat(pair, " ");
             strcat(pair, item->valuestring);
 
-            printf("%s ", pair);
-
+            //printf("%s ", pair);
 
             const int transitionClass = string_to_class(pair, classes, entries);
             if (transitionClass != -1) {
                 transitionMatrix[currentClass][transitionClass] += 1;
-                printf("increment");
+                //printf("increment");
             }
 
-            printf("\n");
+            //printf("\n");
         }
     }
+}
 
-    print_2d_array(transitionMatrix, entries);
+static struct markov_chain* create_text_markov_chain() {
+    const cJSON* sourceText = parse_mrkv_file();
+    int entries = cJSON_GetArraySize(sourceText);
+    char** classes = malloc(entries * sizeof(*classes));
+    float** transitionMatrix = calloc(entries, sizeof(float*));
+    for (int i = 0; i < entries; i++)
+        transitionMatrix[i] = calloc(entries, sizeof(float));
 
+    if (classes == NULL) {
+        fprintf(stderr, "Couldn't allocate memory for class identifiers.");
+        return NULL;
+    }
+
+    populate_classes(sourceText, classes);
+    printf("Loaded %d combinations.\n", entries);
+
+    populate_transition_matrix(sourceText, classes, entries, transitionMatrix);
     normalize_matrix(transitionMatrix, entries);
-    struct markov_chain chain = createMarkovChain(entries, transitionMatrix);
 
-    for (i = 0; i < 1200; i++) {
-        char* classString = strdup(class_to_string(chain.current_class, classes, entries));
+    struct markov_chain* chain = malloc(sizeof(*chain));
+    if (!chain) {
+        fprintf(stderr, "Couldn't allocate memory for chain.");
+        return NULL;
+    }
+
+    *chain = createMarkovChain(entries, transitionMatrix);
+    chain->labels = classes;
+    return chain;
+}
+
+static void run_text_markov_chain() {
+    struct markov_chain* chain = create_text_markov_chain();
+
+    for (int i = 0; i < 1200; i++) {
+        char* classString = strdup(class_to_string(chain->current_class, chain->labels, chain->size));
         if (i == 0)
             printf("%s", classString);
         else {
@@ -200,11 +222,12 @@ void run_text_markov_chain() {
             if (sscanf(classString, "%*s %49s", res) != 1) continue;
             printf("%s ", res);
         }
+
         if (i > 0 && i % 30 == 0) printf("\n");
         fflush(stdout);
-        hop(&chain);
+        hop(chain);
 
-        if (chain.current_class == -1 || chain.current_class == chain.size) {chain.current_class = 0;}
+        if (chain->current_class == -1 || chain->current_class == chain->size) {chain->current_class = 0;}
     }
 }
 
