@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "lib/cJSON.h"
+
+const char* TEXT_SOURCE = "./text.txt";
 
 struct markov_chain {
     int size;
@@ -54,6 +57,19 @@ static struct markov_chain createRandomChain(const int size) {
     return result;
 }
 
+static struct markov_chain createMarkovChain(const int size, float** transitionMatrix) {
+    struct markov_chain result;
+
+    result.size = size;
+    result.current_class = 0;
+    result.matrix = transitionMatrix;
+    result.hop = hop;
+
+    return result;
+}
+
+
+
 static void print_2d_array(float** array, const int size) {
     for (int i = 0; i < size; i++) {
         printf("row %d: ", i);
@@ -64,8 +80,7 @@ static void print_2d_array(float** array, const int size) {
     }
 }
 
-int main() {
-    srand((unsigned int)time(NULL));
+void run_random_markov_chain_example() {
     struct markov_chain chain = createRandomChain(5);
 
     printf("Generated following transition matrix:\n");
@@ -75,4 +90,14 @@ int main() {
         printf("%d\n", chain.current_class);
         hop(&chain);
     }
+}
+
+void run_text_markov_chain() {
+    char* jsonString
+    cJSON sourceText = cJSON_Parse()
+}
+
+int main() {
+    srand((unsigned int)time(NULL));
+    run_text_markov_chain();
 }
