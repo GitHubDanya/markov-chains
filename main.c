@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include "lib/cJSON.h"
 
@@ -11,6 +12,19 @@ struct markov_chain {
     float** matrix;
     void (*hop)(struct markov_chain* self);
 };
+
+static void normalize_matrix(float** matrix, const int size) {
+    for (int i = 0; i < size; i++) {
+        float rowSum = 0.0f;
+        for (int j = 0; j < size; j++) {
+            rowSum += matrix[i][j];
+        }
+
+        for (int j = 0; j < size; j++) {
+            matrix[i][j] /= rowSum;
+        }
+    }
+}
 
 static void populate_with_rand(float** matrix, const int size) {
     // populate
@@ -68,8 +82,6 @@ static struct markov_chain createMarkovChain(const int size, float** transitionM
     return result;
 }
 
-
-
 static void print_2d_array(float** array, const int size) {
     for (int i = 0; i < size; i++) {
         printf("row %d: ", i);
@@ -78,6 +90,18 @@ static void print_2d_array(float** array, const int size) {
         }
         printf("\n");
     }
+}
+
+static int string_to_class(const char* string, char** classes, const int size) {
+    for (int i = 0; i < size; i++) {
+        if (strcmp(string, classes[i]) == 0) {return i;}
+    }
+    return -1;
+}
+
+static char* class_to_string(const int class, char** classes, const int size) {
+    if (class >= size) return "";
+    return classes[class];
 }
 
 void run_random_markov_chain_example() {
@@ -93,8 +117,95 @@ void run_random_markov_chain_example() {
 }
 
 void run_text_markov_chain() {
-    char* jsonString
-    cJSON sourceText = cJSON_Parse()
+    FILE *textSamples = fopen("./probabilities.mrkv", "rb");
+    if (!textSamples) {
+        fprintf(stderr, "Text file not found");
+        return;
+    }
+
+    fseek(textSamples, 0, SEEK_END);
+    long length = ftell(textSamples);
+    fseek(textSamples, 0, SEEK_SET);
+
+    char *buffer = malloc(length + 1);
+    if (!buffer) {
+        fprintf(stderr, "Couldn't allocate memory for the given text file.");
+        fclose(textSamples);
+        return;
+    }
+
+    size_t read_bytes = fread(buffer, 1, length, textSamples);
+    buffer[read_bytes] = '\0';
+
+    fclose(textSamples);
+    cJSON* sourceText = cJSON_Parse(buffer);
+    free(buffer);
+
+    int entries = cJSON_GetArraySize(sourceText);
+    char** classes = malloc(entries * sizeof(*classes));
+
+    float** transitionMatrix = calloc(entries, sizeof(float*));
+    for (int i = 0; i < entries; i++)
+        transitionMatrix[i] = calloc(entries, sizeof(float));
+
+    if (classes == NULL) {
+        fprintf(stderr, "Couldn't allocate memory for class identifiers.");
+        return;
+    }
+
+    const cJSON* keyNode = NULL;
+    int i = 0;
+    cJSON_ArrayForEach(keyNode, sourceText) {
+        classes[i] = strdup(keyNode->string);
+        printf("%s\n", classes[i]);
+        i++;
+    }
+
+    printf("\n\n");
+
+    cJSON_ArrayForEach(keyNode, sourceText) {
+        const cJSON *item = NULL;
+        int currentClass = string_to_class(keyNode->string, classes, entries);
+        cJSON_ArrayForEach(item, keyNode) {
+            char pair[64];
+            if (sscanf(keyNode->string, "%*s %49s", pair) != 1) continue;
+
+            strcat(pair, " ");
+            strcat(pair, item->valuestring);
+
+            printf("%s ", pair);
+
+
+            const int transitionClass = string_to_class(pair, classes, entries);
+            if (transitionClass != -1) {
+                transitionMatrix[currentClass][transitionClass] += 1;
+                printf("increment");
+            }
+
+            printf("\n");
+        }
+    }
+
+    print_2d_array(transitionMatrix, entries);
+
+    normalize_matrix(transitionMatrix, entries);
+    struct markov_chain chain = createMarkovChain(entries, transitionMatrix);
+
+    for (i = 0; i < 1200; i++) {
+        char* classString = strdup(class_to_string(chain.current_class, classes, entries));
+        if (i == 0)
+            printf("%s", classString);
+        else {
+            char res[64];
+            if (sscanf(classString, "%*s %49s", res) != 1) continue;
+            printf("%s ", res);
+        }
+        if (i > 0 && i % 30 == 0) printf("\n");
+        fflush(stdout);
+        hop(&chain);
+
+        if (chain.current_class == -1 || chain.current_class == chain.size) {chain.current_class = 0;}
+    }
 }
 
 int main() {
