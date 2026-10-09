@@ -1,7 +1,9 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #include "lib/cJSON.h"
 
 static const char* TEXT_SOURCE = "./probabilities.mrkv";
@@ -127,6 +129,13 @@ static char* get_last_word_of_string(char* input) {
     return res;
 }
 
+static char* get_first_word_of_string(char *input) {
+    char res[256];
+    if (sscanf(input, "%127s", res) == 1)
+        return strdup(res);
+    return input;
+}
+
 const cJSON* parse_mrkv_file() {
     FILE *textSamples = fopen(TEXT_SOURCE, "rb");
     if (!textSamples) {
@@ -168,12 +177,15 @@ static void populate_transition_matrix(const cJSON* sourceText, char** classes, 
         const cJSON *item = NULL;
         const int currentClass = string_to_class(keyNode->string, classes, entries);
         cJSON_ArrayForEach(item, keyNode) {
+            char* firstWord = get_first_word_of_string(keyNode->string);
+            // delete the first word
             char* key = keyNode->string;
             char *res = key + strcspn(key, " \t");
             res += strspn(res, " \t");
 
             if (*res == '\0' || item->valuestring == NULL) continue;
 
+            // add the next word
             char pairBuffer[256];
             snprintf(pairBuffer, sizeof(pairBuffer), "%s %s", res, item->valuestring);
 
@@ -181,6 +193,19 @@ static void populate_transition_matrix(const cJSON* sourceText, char** classes, 
             if (transitionClass != -1) {
                 transitionMatrix[currentClass][transitionClass] += 1;
             }
+
+            // increase values for strings trailing in , and . to hop between topics
+            // if (firstWord != NULL) {
+            //     if (strchr(firstWord, '.') != NULL) {
+            //         for (int i = 0; i < entries; i++)
+            //             if (isupper((unsigned char)*class_to_string(i, classes, entries)))
+            //                 transitionMatrix[currentClass][i]++;
+            //     }
+            //     else if (strchr(firstWord, ',') != NULL) {
+            //         for (int i = 0; i < entries; i++)
+            //             transitionMatrix[currentClass][i]++;
+            //     }
+            // }
         }
     }
 }
@@ -199,16 +224,22 @@ static struct markov_chain* create_text_markov_chain() {
     }
 
     populate_classes(sourceText, classes);
-    printf("Loaded %d combinations.\n", entries);
-
+    printf("Loaded %d combinations.\nPopulating transition matrix... ", entries);
+    fflush(stdout);
     populate_transition_matrix(sourceText, classes, entries, transitionMatrix);
+    printf("DONE\nNormalizing transition matrix... ");
+    fflush(stdout);
     normalize_matrix(transitionMatrix, entries);
+    printf("DONE\n");
+    fflush(stdout);
 
     struct markov_chain* chain = malloc(sizeof(*chain));
     if (!chain) {
         fprintf(stderr, "Couldn't allocate memory for chain.");
         return NULL;
     }
+
+    printf("Allocated chain.\n");
 
     *chain = createMarkovChain(entries, transitionMatrix);
     chain->labels = classes;
@@ -217,22 +248,33 @@ static struct markov_chain* create_text_markov_chain() {
 
 static void run_text_markov_chain() {
     struct markov_chain* chain = create_text_markov_chain();
+    int iterations = 1200;
 
-    for (int i = 0; i < 1200; i++) {
+    //print_2d_array(chain->matrix, chain->size);
+
+    printf("Running for %d iterations...\n\n", iterations);
+
+    sleep(1);
+
+    for (int i = 0; i < iterations; i++) {
         char* classString = strdup(class_to_string(chain->current_class, chain->labels, chain->size));
-        if (i == 0)
-            printf("%s ", classString);
-        else {
-            char *res = get_last_word_of_string(classString);
+        // if (i == 0)
+        //     printf("%s ", classString);
+        // else {
+        //     char *res = get_last_word_of_string(classString);
+        //
+        //     printf("%s (%s)\n", res, classString);
+        // }
 
-            printf("%s ", res);
-        }
+        printf("%s ", get_first_word_of_string(classString));
 
         if (i > 0 && i % 30 == 0) printf("\n");
         fflush(stdout);
         hop(chain);
 
         if (chain->current_class == -1 || chain->current_class == chain->size) {chain->current_class = 0;}
+
+        free(classString);
     }
 }
 
