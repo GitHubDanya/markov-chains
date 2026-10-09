@@ -107,6 +107,26 @@ static char* class_to_string(const int class, char** classes, const int size) {
     return classes[class];
 }
 
+static char* get_last_word_of_string(char* input) {
+    const size_t len = strlen(input);
+    char *end = input + len;
+
+    // clear trailing whitespace
+    while (end > input && (end[-1] == ' ' || end[-1] == '\t')) {
+        end--;
+    }
+
+    if (end == input) return input;
+
+    // move backward to find last word
+    char *res = end;
+    while (res > input && res[-1] != ' ' && res[-1] != '\t') {
+        res--;
+    }
+
+    return res;
+}
+
 const cJSON* parse_mrkv_file() {
     FILE *textSamples = fopen(TEXT_SOURCE, "rb");
     if (!textSamples) {
@@ -138,7 +158,6 @@ static void populate_classes(const cJSON* sourceText, char** classes) {
     int i = 0;
     cJSON_ArrayForEach(keyNode, sourceText) {
         classes[i] = strdup(keyNode->string);
-        //printf("%s\n", classes[i]);
         i++;
     }
 }
@@ -149,21 +168,19 @@ static void populate_transition_matrix(const cJSON* sourceText, char** classes, 
         const cJSON *item = NULL;
         const int currentClass = string_to_class(keyNode->string, classes, entries);
         cJSON_ArrayForEach(item, keyNode) {
-            char pair[128];
-            if (sscanf(keyNode->string, "%*s %49s", pair) != 1) continue;
+            char* key = keyNode->string;
+            char *res = key + strcspn(key, " \t");
+            res += strspn(res, " \t");
 
-            strcat(pair, " ");
-            strcat(pair, item->valuestring);
+            if (*res == '\0' || item->valuestring == NULL) continue;
 
-            //printf("%s ", pair);
+            char pairBuffer[256];
+            snprintf(pairBuffer, sizeof(pairBuffer), "%s %s", res, item->valuestring);
 
-            const int transitionClass = string_to_class(pair, classes, entries);
+            const int transitionClass = string_to_class(pairBuffer, classes, entries);
             if (transitionClass != -1) {
                 transitionMatrix[currentClass][transitionClass] += 1;
-                //printf("increment");
             }
-
-            //printf("\n");
         }
     }
 }
@@ -206,8 +223,8 @@ static void run_text_markov_chain() {
         if (i == 0)
             printf("%s ", classString);
         else {
-            char res[128];
-            if (sscanf(classString, "%*s %49s", res) != 1) continue;
+            char *res = get_last_word_of_string(classString);
+
             printf("%s ", res);
         }
 
