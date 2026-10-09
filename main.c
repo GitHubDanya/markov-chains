@@ -65,12 +65,11 @@ static void print_2d_array(float** array, const int size) {
 }
 
 int main() {
-    srand((unsigned int)time(nullptr));
-    struct markov_chain chain = createRandomChain(3);
+    srand((unsigned int)time(NULL));
+    struct markov_chain chain = createRandomChain(5);
 
     printf("Generated following transition matrix:\n");
     print_2d_array(chain.matrix, chain.size);
-
 
     for (int i = 0; i < 50; i++) {
         printf("%d\n", chain.current_class);
