@@ -3,6 +3,8 @@
 
 A good blog by Andrew Healey, which gives a deeper overlook of Markov chains can be found [here](https://healeycodes.com/generating-text-with-markov-chains).
 
+Setosa's interactive demo of Markov chains can be found [here](https://setosa.io/blog/2014/07/26/markov-chains/index.html).
+
 This repository materializes a Markov chain for guessing the next word in a text. Given a specific input file, the program parses it into phrases, and each phrase gets assigned a unique class. Each class then gets defined with possible next words for it, those that create a new valid phrase already indexed by the program. These classes get written into a transition matrix, which gets fed into the chain and ran for `i` iterations, producing a text.
 
 ## Usage
