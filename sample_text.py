@@ -2,11 +2,11 @@ import json
 from collections import defaultdict
 
 SOURCE_FILE = "./text.txt"
-RES_FILE = "./cmake-build-debug/probabilities.mrkv"
+RES_FILE = "./cmake-build-release/probabilities.mrkv"
 KEY_TERMS = 3
 
 def get_word_pairs(source_file: str, key_terms: int) -> dict:
-    with open(source_file, 'r') as f:
+    with open(source_file, "r") as f:
         words = f.read().split()
 
     res = defaultdict(list)
@@ -17,6 +17,6 @@ def get_word_pairs(source_file: str, key_terms: int) -> dict:
 
     return dict(res)
 
-with open(RES_FILE, 'w') as f:
+with open(RES_FILE, "w") as f:
     words = get_word_pairs(SOURCE_FILE, KEY_TERMS)
     f.write(json.dumps(words))
